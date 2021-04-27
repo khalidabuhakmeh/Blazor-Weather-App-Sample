@@ -1,0 +1,149 @@
+@page "/"
+@using WeatherAPI.NET
+@using WeatherAPI.NET.Entities
+@using System.Threading
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.Extensions.Logging
+@inject WeatherAPIClient _client
+@inject ILogger<Weather> _logger
+
+<h3>🌦 Weather</h3>
+
+@if (Message is {})
+{
+    <div class="alert alert-danger" role="alert">
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+        <h4 class="alert-heading">🐿 Oh Nuts!</h4>
+        <p>
+            <i class="oi oi-warning"></i> @Message
+        </p>
+    </div>
+}
+
+<EditForm Model="@Input" OnValidSubmit="GetForecast" readonly="@_loading">
+    <DataAnnotationsValidator></DataAnnotationsValidator>
+    <label for="postalCode">Postal Code</label>
+    <div class="input-group mb-3">
+        <InputText @bind-Value="Input.Value" id="postalCode" class="form-control" aria-describedby="postalCodeHelp" autocomplete="off"/>
+        <div class="input-group-append">
+            @if (_loading == true)
+            {
+                <button class="btn btn-primary" type="submit" disabled>
+                    <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
+                    Loading...
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-primary" type="submit">
+                    Search
+                </button>
+            }
+        </div>
+    </div>
+    <small id="postalCodeHelp" class="form-text text-muted">
+        <ValidationMessage For="() => Input.Value"/> Search For Weather (ex. US Zipcode, UK Postcode, or Canada Postalcode).
+    </small>
+</EditForm>
+
+
+@if (_forecast is not null)
+{
+    <hr/>
+
+    <h3>
+        @_forecast.Location.Name
+        <small class="text-muted">@_forecast.Location.Region, @_forecast.Location.Country</small>
+    </h3>
+
+    <div class="card-group">
+        @foreach (var day in _forecast.Forecast.ForecastDay)
+        {
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title">
+                        @day.Date.DayOfWeek
+                        <small class="text-muted text-right">@day.Date.ToShortDateString()</small>
+                    </h4>
+                    <div class="card-body">
+                        <p class="card-text text-capitalize text-lg-center">
+                            <img src="@day.Day.Condition.IconURL" alt="@day.Day.Condition.Description">
+                            <strong>@day.Day.Condition.Description</strong>
+                        </p>
+
+                        <ul class="card-text">
+                            <li>@day.Day.MinimumTemperatureF F to @day.Day.MaximumTemperatureF F</li>
+                            <li>UV: @day.Day.UV</li>
+                            @if (day.Day.WillItRain)
+                            {
+                                <li>Rain (@day.Day.ChanceOfRain%): @day.Day.TotalPrecipitationIN inches</li>
+                            }
+                            @if (day.Day.WillItSnow)
+                            {
+                                <li>Snow (@day.Day.ChanceOfSnow%): @day.Day.TotalPrecipitationIN inches</li>
+                            }
+                            <li>Wind: @day.Day.MaximumWindMPH MPH</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+    <div class="row">
+        <div class="col">
+            <p style="padding-top: 1em">
+                <a href="https://www.weatherapi.com/" title="Free Weather API">
+                    <img src='//cdn.weatherapi.com/v4/images/weatherapi_logo.png' alt="Weather data by WeatherAPI.com" border="0">
+                </a>
+            </p>
+        </div>
+    </div>
+}
+
+@code {
+
+    public class PostalCodeModel
+    {
+        [Required(AllowEmptyStrings = false), Display(Name = "Postal Code")]
+        public string Value { get; set; }
+    }
+
+    ForecastResponseEntity _forecast;
+    PostalCodeModel Input { get; } = new();
+    string Message { get; set; }
+    bool? _loading;
+
+    private async void GetForecast(EditContext editContext)
+    {
+        var source = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        Message = null;
+
+        try
+        {
+            _loading = true;
+            _forecast = await _client.Forecast
+                .GetForecastAsync(new ForecastRequestEntity()
+                    .WithPostalCode(Input.Value)
+                    .WithDays(3), source.Token
+                );
+        }
+        catch (Exception e)
+        {
+            Message = source.IsCancellationRequested 
+                ? "Request to API timed out" 
+                : e.Message;
+
+            _logger.LogError(e, "couldn't retrieve forecast");
+        }
+        finally
+        {
+            _loading = null;
+            // poke blazor to reset 
+            // in case an error has occurred
+            StateHasChanged();
+        }
+    }
+
+}
