@@ -30,7 +30,7 @@
         <div class="input-group-append">
             @if (_loading == true)
             {
-                <button class="btn btn-primary" type="submit" @onclick="() => source?.Cancel()">
+                <button class="btn btn-primary" type="submit" @onclick="() => _source?.Cancel()">
                     <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
                     Loading...
                 </button>
@@ -114,11 +114,11 @@
     PostalCodeModel Input { get; } = new();
     string Message { get; set; }
     bool? _loading;
-    CancellationTokenSource source;
+    CancellationTokenSource _source;
 
     private async void GetForecast(EditContext editContext)
     {
-        source = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        _source = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         Message = null;
 
         try
@@ -127,16 +127,16 @@
             var result = await _client.Forecast
                 .GetForecastAsync(new ForecastRequestEntity()
                     .WithPostalCode(Input.Value)
-                    .WithDays(3), source.Token
+                    .WithDays(3), _source.Token
                 );
             
-            if (source?.IsCancellationRequested == false) {
+            if (_source?.IsCancellationRequested == false) {
                 _forecast = result;    
             }
         }
         catch (Exception e)
         {
-            Message = source.IsCancellationRequested 
+            Message = _source?.IsCancellationRequested == true
                 ? "Request to API timed out" 
                 : e.Message;
 
@@ -145,7 +145,7 @@
         finally
         {
             _loading = null;
-            source = null;
+            _source = null;
             // poke blazor to reset 
             // in case an error has occurred
             StateHasChanged();
