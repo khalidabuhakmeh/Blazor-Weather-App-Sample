@@ -30,7 +30,7 @@
         <div class="input-group-append">
             @if (_loading == true)
             {
-                <button class="btn btn-primary" type="submit" disabled>
+                <button class="btn btn-primary" type="submit" @onclick="() => source?.Cancel()">
                     <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
                     Loading...
                 </button>
@@ -114,20 +114,25 @@
     PostalCodeModel Input { get; } = new();
     string Message { get; set; }
     bool? _loading;
+    CancellationTokenSource source;
 
     private async void GetForecast(EditContext editContext)
     {
-        var source = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        source = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         Message = null;
 
         try
         {
             _loading = true;
-            _forecast = await _client.Forecast
+            var result = await _client.Forecast
                 .GetForecastAsync(new ForecastRequestEntity()
                     .WithPostalCode(Input.Value)
                     .WithDays(3), source.Token
                 );
+            
+            if (source?.IsCancellationRequested == false) {
+                _forecast = result;    
+            }
         }
         catch (Exception e)
         {
@@ -140,10 +145,10 @@
         finally
         {
             _loading = null;
+            source = null;
             // poke blazor to reset 
             // in case an error has occurred
             StateHasChanged();
         }
     }
-
 }
